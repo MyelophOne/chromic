@@ -27,8 +27,8 @@ ignore_policies=0
 launch_on_exit=
 launch_on_startup=
 command_line=
-data_dir=%app%\..\Data
-cache_dir=%app%\..\Cache
+data_dir=%app%\..\User Data
+cache_dir=
 
 [tabs]
 keep_last_tab=1
@@ -127,13 +127,17 @@ C:\PortableChrome\App\chromic.ini
 the defaults resolve as follows:
 
 ```text
-%app%\..\Data  -> C:\PortableChrome\Data
-%app%\..\Cache -> C:\PortableChrome\Cache
+%app%\..\User Data -> C:\PortableChrome\User Data
 ```
 
 Setting `data_dir=none` or `cache_dir=none` disables the corresponding
 automatically added argument. Normal Windows environment variables are also
 expanded in configured paths and commands.
+
+Missing or empty `cache_dir` also leaves Chrome's cache location unchanged.
+Relative paths are resolved against the directory containing the DLL, never
+the shortcut's working directory. The `%app%` placeholder cannot be overridden
+by a Windows environment variable of the same name.
 
 `launch_on_startup` and `launch_on_exit` execute their values through
 `cmd.exe`. Separate multiple commands with `;`. Leave the values empty if this
@@ -141,15 +145,59 @@ behavior is not needed.
 
 ## Moving a profile
 
-Move the application directory and the `Data` directory together. Moving the
-`Cache` directory is optional. The destination must use a DLL built with the
-same portable key.
+Move the application directory and the entire `User Data` directory together,
+including `Local State`. The destination must use a DLL built with the same
+portable key. If two Chrome installations use this data, configure both to use
+the same user-data root. Do not connect just a profile subdirectory to a
+different user-data root. Prefer the same direct path for both launches.
+
+On the removable installation, `data_dir=%app%\..\User Data` follows the
+application when its drive letter changes. On an installed Chrome, configure
+`data_dir` to point to that same removable directory. The removable installation
+does not look up or depend on the installed browser's profiles.
+
+Use a non-default user-data root on every computer. Chromium's App-Bound
+provider does not create new App-Bound keys when Chrome is using a non-default
+user-data directory. This does not convert previously App-Bound data. See the
+[Chromium support check](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/os_crypt/app_bound_encryption_win.cc)
+and [key provider](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/os_crypt/app_bound_encryption_provider_win.cc).
+
+The DLL now cancels startup if it cannot install a required portability hook
+or relaunch with the configured arguments. It does not edit `Local State`,
+delete keys, migrate cookies, or repair extension registrations.
 
 Create a new profile while Chromic is active whenever possible. Passwords,
 cookies, or tokens previously protected by ordinary Chrome with machine-bound
 Windows DPAPI may not become portable retroactively. Extensions, bookmarks,
 settings, and data written through Chromic are intended to survive moving the
 profile, but compatibility with future browser versions cannot be guaranteed.
+
+To authenticate the portable master key without changing the profile, use
+PowerShell 7.4 or later:
+
+```powershell
+.\check-profile.ps1 -UserDataDirectory '<path to the complete User Data directory>'
+```
+
+Pass `-PortableKeyFile` if the DLL was built with a different key file. The
+check rejects ordinary Windows-bound master keys and keys from another build.
+It reports an existing App-Bound key separately; success authenticates only
+the portable master key, not every database entry or Google session. No
+plaintext keys or account data are printed.
+
+Close Chrome completely before copying or unplugging the profile. Use matching
+Chrome versions when alternating installations. Google may require a new login
+even when local decryption works. Device-bound credentials such as Windows
+Hello are outside this DLL's portability support.
+
+## Tests
+
+Run `tests\run.ps1` with the existing LLVM-MinGW toolchain. It compiles a test
+executable using a public test-only key and does not build or install the
+production DLL. Tests exercise real API detours, failure reporting, AES-GCM
+authentication without host DPAPI, and path/cache configuration. A browser
+test on a second Windows account/computer is still required before describing
+a particular Chrome release and profile as verified portable.
 
 ## GitHub Releases
 

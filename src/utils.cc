@@ -11,16 +11,16 @@ HMODULE g_module = nullptr;
 namespace {
 
 std::wstring ExpandVariables(std::wstring path) {
+  for (size_t pos = 0; (pos = path.find(L"%app%", pos)) != std::wstring::npos;) {
+    path.replace(pos, 5, AppDir());
+    pos += AppDir().size();
+  }
   DWORD needed = ExpandEnvironmentStringsW(path.c_str(), nullptr, 0);
   if (needed) {
     std::vector<wchar_t> expanded(needed);
     if (ExpandEnvironmentStringsW(path.c_str(), expanded.data(), needed)) {
       path.assign(expanded.data());
     }
-  }
-  for (size_t pos = 0; (pos = path.find(L"%app%", pos)) != std::wstring::npos;) {
-    path.replace(pos, 5, AppDir());
-    pos += AppDir().size();
   }
   return path;
 }
@@ -57,6 +57,7 @@ std::wstring ReadIni(std::wstring_view section, std::wstring_view key,
 
 std::wstring ExpandPath(std::wstring path) {
   path = ExpandVariables(std::move(path));
+  if (PathIsRelativeW(path.c_str())) path = AppDir() + L"\\" + path;
   std::vector<wchar_t> absolute(32768);
   const DWORD length = GetFullPathNameW(path.c_str(), absolute.size(),
                                         absolute.data(), nullptr);

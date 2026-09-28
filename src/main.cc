@@ -21,7 +21,13 @@ int BrowserEntry() {
   const wchar_t* command_line = GetCommandLineW();
   if (!wcsstr(command_line, L"--type=")) {
     RelaunchPortable();
-    InstallPortableHooks();
+    if (!InstallPortableHooks()) {
+      MessageBoxW(nullptr,
+          L"Chromic could not install the portable encryption hooks. "
+          L"Chrome has not been started to avoid machine-bound profile writes.",
+          L"Chromic", MB_OK | MB_ICONERROR);
+      return ERROR_DLL_INIT_FAILED;
+    }
     InstallPolicyHook();
     InstallTabHooks();
     RunConfiguredCommands(GetConfig().launch_on_startup());

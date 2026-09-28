@@ -60,17 +60,16 @@ void MergeDisableFeatures(std::vector<std::wstring>& args) {
 
 bool RelaunchPortable() {
   std::vector<std::wstring> args = Parse(GetCommandLineW(), true);
-  if (HasSwitch(args, L"--portable")) return false;
-
-  const auto configured = Parse(L"chromic.exe " + GetConfig().command_line(),
-                                true);
-
   auto sentinel = std::find(args.begin(), args.end(), L"--");
   std::vector<std::wstring> trailing;
   if (sentinel != args.end()) {
     trailing.assign(sentinel, args.end());
     args.erase(sentinel, args.end());
   }
+  if (HasSwitch(args, L"--portable")) return false;
+
+  const auto configured = Parse(L"chromic.exe " + GetConfig().command_line(),
+                                true);
   args.insert(args.end(), configured.begin(), configured.end());
   args.emplace_back(L"--portable");
   MergeDisableFeatures(args);
@@ -89,7 +88,9 @@ bool RelaunchPortable() {
 
   std::vector<wchar_t> executable(32768);
   if (!GetModuleFileNameW(nullptr, executable.data(), executable.size())) {
-    return false;
+    MessageBoxW(nullptr, L"Chromic could not resolve the browser executable.",
+                L"Chromic", MB_OK | MB_ICONERROR);
+    ExitProcess(ERROR_PATH_NOT_FOUND);
   }
   std::wstring command = QuoteArg(executable.data()) + L" " + JoinArgs(args);
   std::vector<wchar_t> mutable_command(command.begin(), command.end());
@@ -102,7 +103,12 @@ bool RelaunchPortable() {
   if (!CreateProcessW(executable.data(), mutable_command.data(), nullptr,
                       nullptr, FALSE, 0, nullptr, AppDir().c_str(), &startup,
                       &process)) {
-    return false;
+    const DWORD error = GetLastError();
+    MessageBoxW(nullptr,
+                L"Chromic could not restart Chrome with the configured "
+                L"user-data directory. Startup was cancelled.",
+                L"Chromic", MB_OK | MB_ICONERROR);
+    ExitProcess(error ? error : ERROR_PROCESS_ABORTED);
   }
   CloseHandle(process.hThread);
   CloseHandle(process.hProcess);

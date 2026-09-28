@@ -199,6 +199,10 @@ BOOL WINAPI PortableUpdateAttribute(LPPROC_THREAD_ATTRIBUTE_LIST list,
 
 bool AddApiHook(LPCWSTR module, LPCSTR name, void* replacement,
                 void** original) {
+  if (!GetModuleHandleW(module) &&
+      !LoadLibraryExW(module, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)) {
+    return false;
+  }
   void* target = nullptr;
   if (MH_CreateHookApiEx(module, name, replacement, original, &target) !=
       MH_OK) {
@@ -209,19 +213,19 @@ bool AddApiHook(LPCWSTR module, LPCSTR name, void* replacement,
 
 }
 
-void InstallPortableHooks() {
+bool InstallPortableHooks() {
   void* ignored = nullptr;
-  AddApiHook(L"kernel32", "GetComputerNameW",
-             reinterpret_cast<void*>(PortableComputerName), &ignored);
-  AddApiHook(L"kernel32", "GetVolumeInformationW",
+  if (!AddApiHook(L"kernel32", "GetComputerNameW",
+             reinterpret_cast<void*>(PortableComputerName), &ignored)) return false;
+  if (!AddApiHook(L"kernel32", "GetVolumeInformationW",
              reinterpret_cast<void*>(PortableVolumeInformation),
-             reinterpret_cast<void**>(&g_volume_info));
-  AddApiHook(L"kernel32", "UpdateProcThreadAttribute",
+             reinterpret_cast<void**>(&g_volume_info))) return false;
+  if (!AddApiHook(L"kernel32", "UpdateProcThreadAttribute",
              reinterpret_cast<void*>(PortableUpdateAttribute),
-             reinterpret_cast<void**>(&g_update_attribute));
-  AddApiHook(L"crypt32", "CryptProtectData",
-             reinterpret_cast<void*>(PortableCryptProtect), &ignored);
-  AddApiHook(L"crypt32", "CryptUnprotectData",
+             reinterpret_cast<void**>(&g_update_attribute))) return false;
+  if (!AddApiHook(L"crypt32", "CryptProtectData",
+             reinterpret_cast<void*>(PortableCryptProtect), &ignored)) return false;
+  return AddApiHook(L"crypt32", "CryptUnprotectData",
              reinterpret_cast<void*>(PortableCryptUnprotect),
              reinterpret_cast<void**>(&g_crypt_unprotect));
 }
